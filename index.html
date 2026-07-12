@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>KL 대중교통 노선도 — Sunway 거주자용</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root{
+    --bg:#f4f5f7; --card:#fff; --ink:#1c1e26; --sub:#6b7280; --line:#e5e7eb;
+    --brand:#0f4c81; --home:#e11d48;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{font-family:'Segoe UI','Malgun Gothic',system-ui,sans-serif; background:var(--bg); color:var(--ink)}
+  header{background:#12203a; color:#fff; padding:14px 18px; position:sticky; top:0; z-index:1100}
+  header h1{font-size:17px; font-weight:700}
+  header .sub{font-size:12px; color:#9fb3d1; margin-top:2px}
+  nav{display:flex; gap:6px; background:#12203a; padding:0 12px 10px; position:sticky; top:58px; z-index:1100}
+  nav button{flex:1; border:0; border-radius:8px; padding:9px 0; font-size:14px; font-weight:600; background:#1e3355; color:#c8d6ec; cursor:pointer}
+  nav button.on{background:#fff; color:#12203a}
+  main{max-width:860px; margin:0 auto; padding:14px}
+  main.wide{max-width:1500px}
+  .hidden{display:none!important}
+
+  /* line cards */
+  .cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:10px}
+  .lcard{background:var(--card); border-radius:12px; padding:12px 14px; cursor:pointer; border:1px solid var(--line); display:flex; align-items:center; gap:12px; transition:.15s}
+  .lcard:hover{transform:translateY(-2px); box-shadow:0 4px 14px rgba(0,0,0,.08)}
+  .chip{min-width:44px; height:28px; border-radius:14px; color:#fff; font-weight:700; font-size:12px; display:flex; align-items:center; justify-content:center; padding:0 8px}
+  .lcard .nm{font-size:14px; font-weight:600}
+  .lcard .meta{font-size:12px; color:var(--sub); margin-top:2px}
+  .notice{background:#eef4fb; border:1px solid #d3e2f5; border-radius:10px; padding:10px 12px; font-size:12.5px; color:#33517a; margin-bottom:12px; line-height:1.55}
+  .notice a{color:#0f4c81}
+
+  /* line detail */
+  .ldhead{display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap}
+  .back{border:1px solid var(--line); background:#fff; border-radius:8px; padding:7px 12px; cursor:pointer; font-size:13px}
+  .toggle{margin-left:auto; display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden}
+  .toggle button{border:0; background:#fff; padding:7px 14px; font-size:13px; cursor:pointer}
+  .toggle button.on{background:var(--brand); color:#fff}
+  .strip{background:#fff; border:1px solid var(--line); border-radius:12px; padding:18px 10px; }
+  .srow{display:flex; align-items:flex-start; gap:12px; position:relative; cursor:pointer; padding:0 8px}
+  .srow:hover{background:#f8fafc}
+  .sdotcol{width:22px; display:flex; flex-direction:column; align-items:center; align-self:stretch}
+  .sdot{width:14px; height:14px; border-radius:50%; background:#fff; border:3.5px solid currentColor; z-index:2; flex:none; margin-top:3px}
+  .sdot.xfer{width:16px; height:16px; border-width:4px; box-shadow:0 0 0 2px #fff,0 0 0 3.5px #94a3b8}
+  .sline{width:6px; flex:1; background:currentColor; margin-top:-2px}
+  .srow:last-child .sline{background:transparent}
+  .sinfo{padding-bottom:20px; min-width:0}
+  .snm{font-size:14px; font-weight:600}
+  .sref{font-size:11px; color:var(--sub); font-weight:500; margin-left:5px}
+  .badges{margin-top:3px; display:flex; gap:4px; flex-wrap:wrap}
+  .badge{font-size:10.5px; color:#fff; border-radius:8px; padding:1.5px 7px; font-weight:600}
+  .nearhome{font-size:10.5px; background:#fde7ec; color:var(--home); border:1px solid #f5b8c6; border-radius:8px; padding:1px 6px; font-weight:700}
+
+  /* map */
+  #map{height:calc(100vh - 210px); min-height:420px; border-radius:12px; border:1px solid var(--line)}
+  .mapbar{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px}
+  .mapbar button{border:1px solid var(--line); background:#fff; border-radius:16px; padding:5px 12px; font-size:12px; cursor:pointer; font-weight:600}
+  .mapbar button.on{color:#fff; border-color:transparent}
+
+  /* route planner */
+  .panel{background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px}
+  .frow{display:flex; gap:8px; margin-bottom:8px; align-items:center}
+  .frow label{width:52px; font-size:13px; font-weight:700; color:var(--sub)}
+  .frow input{flex:1; border:1px solid #cbd5e1; border-radius:8px; padding:9px 11px; font-size:14px}
+  .swap{border:1px solid var(--line); background:#fff; border-radius:8px; width:36px; height:36px; cursor:pointer; font-size:15px}
+  .gobtn{width:100%; border:0; background:var(--brand); color:#fff; border-radius:9px; padding:11px 0; font-size:15px; font-weight:700; cursor:pointer; margin-top:4px}
+  .quick{display:flex; gap:6px; flex-wrap:wrap; margin:10px 0 2px}
+  .quick span{font-size:12px; color:var(--sub); align-self:center}
+  .quick button{border:1px solid #cbd5e1; background:#f8fafc; border-radius:14px; padding:4px 11px; font-size:12px; cursor:pointer}
+  .routes{margin-top:14px; display:flex; flex-direction:column; gap:12px}
+  .rcard{background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden}
+  .rhead{display:flex; align-items:center; gap:10px; padding:11px 14px; background:#f8fafc; border-bottom:1px solid var(--line); flex-wrap:wrap}
+  .rtag{font-size:11px; font-weight:700; color:#fff; background:var(--brand); border-radius:6px; padding:2px 8px}
+  .rtime{font-size:18px; font-weight:800}
+  .rmeta{font-size:12px; color:var(--sub)}
+  .gmaps{margin-left:auto; font-size:12px; font-weight:700; color:#fff; background:#1a73e8; border-radius:7px; padding:6px 10px; text-decoration:none}
+  .steps{padding:6px 14px 12px}
+  .step{display:flex; gap:10px; padding:8px 0; border-bottom:1px dashed #eef0f3; font-size:13.5px; align-items:flex-start}
+  .step:last-child{border-bottom:0}
+  .sicon{width:40px; flex:none; text-align:center; font-size:11px; font-weight:800; color:#fff; border-radius:6px; padding:3px 0; margin-top:1px}
+  .sicon.walk{background:#94a3b8}
+  .step .d{line-height:1.5}
+  .step .d small{color:var(--sub)}
+  .err{background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; padding:10px 12px; border-radius:9px; font-size:13px; margin-top:12px}
+  /* route split view */
+  .routewrap{display:flex; gap:12px; align-items:flex-start}
+  .rleft{width:25%; min-width:310px; flex:none; display:flex; flex-direction:column}
+  #rmap{flex:1; height:calc(100vh - 190px); min-height:480px; border-radius:12px; border:1px solid var(--line); position:sticky; top:118px}
+  .rcard{cursor:pointer}
+  .rcard.sel{border-color:var(--brand); box-shadow:0 0 0 2.5px rgba(15,76,129,.28)}
+  .rhint{font-size:11.5px; color:var(--sub); margin-top:8px; text-align:center}
+  @media (max-width:900px){
+    .routewrap{flex-direction:column}
+    .rleft{width:100%; min-width:0}
+    #rmap{width:100%; height:420px; min-height:320px; position:static}
+  }
+  footer{max-width:860px; margin:6px auto 26px; padding:0 14px; font-size:11.5px; color:#94a3b8; line-height:1.6}
+  @media (max-width:640px){ .frow label{width:44px} #map{height:calc(100vh - 240px)} }
+</style>
+</head>
+<body>
+<!--GATE-START--><!-- 비밀번호 게이트 (폐쇄형 운영용) -->
+<div id="gate" style="position:fixed; inset:0; z-index:9999; background:#12203a; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px">
+  <div style="font-size:38px">🚆</div>
+  <div style="color:#fff; font-weight:700; font-size:17px">KL 대중교통 노선도</div>
+  <div style="color:#9fb3d1; font-size:13px">비공개 페이지입니다. 비밀번호를 입력하세요.</div>
+  <form id="gateForm" style="display:flex; gap:8px">
+    <input id="gatePw" type="password" autocomplete="off" style="border:0; border-radius:8px; padding:10px 14px; font-size:15px; width:190px" placeholder="비밀번호">
+    <button style="border:0; border-radius:8px; padding:10px 18px; font-size:14px; font-weight:700; background:#3b82f6; color:#fff; cursor:pointer">입장</button>
+  </form>
+  <div id="gateMsg" style="color:#fda4af; font-size:12.5px; height:16px"></div>
+</div>
+<script>
+(function(){
+  var HASH='3e9cee42'; // FNV-1a of password
+  function fnv(s){var h=0x811c9dc5;for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}return h.toString(16);}
+  var g=document.getElementById('gate');
+  if(sessionStorage.getItem('tmAuth')===HASH){ g.remove(); return; }
+  document.getElementById('gateForm').addEventListener('submit',function(e){
+    e.preventDefault();
+    var v=document.getElementById('gatePw').value.trim();
+    if(fnv(v)===HASH){ sessionStorage.setItem('tmAuth',HASH); g.remove(); }
+    else { document.getElementById('gateMsg').textContent='비밀번호가 올바르지 않습니다.'; document.getElementById('gatePw').value=''; }
+  });
+})();
+</script><!--GATE-END-->
+<header>
+  <h1>🚆 KL·수방자야 대중교통 노선도</h1>
+  <div class="sub">Union Suite(Sunway Avenue) 기준 · UCSI Subang Jaya 통학 · 2026</div>
+</header>
+<nav>
+  <button id="tabLines" class="on">노선</button>
+  <button id="tabMap">지도</button>
+  <button id="tabRoute">길찾기</button>
+</nav>
+
+<main>
+  <!-- LINES LIST -->
+  <section id="vLines">
+    <div class="notice">
+      노선을 클릭하면 <b>노선도 보기 / 지도 보기</b> 두 가지 방식으로 볼 수 있습니다.
+      공식 통합 노선도 원본은 <a href="https://myrapid.com.my/traveling-with-us/how-to-travel-with-us/klang-valley-integrated-transit-map/" target="_blank">Rapid KL 공식 사이트</a>,
+      KTM은 <a href="https://www.ktmb.com.my" target="_blank">KTMB</a> 참조.
+      🏠 표시는 Union Suite에서 도보/한 정거장 내 이용 가능한 역.
+    </div>
+    <div class="cards" id="lineCards"></div>
+  </section>
+
+  <!-- LINE DETAIL -->
+  <section id="vDetail" class="hidden">
+    <div class="ldhead">
+      <button class="back" id="btnBack">← 노선 목록</button>
+      <div class="chip" id="dChip"></div>
+      <div>
+        <div style="font-weight:700; font-size:15px" id="dName"></div>
+        <div style="font-size:12px; color:var(--sub)" id="dMeta"></div>
+      </div>
+      <div class="toggle">
+        <button id="dvStrip" class="on">노선도 보기</button>
+        <button id="dvMap">지도 보기</button>
+      </div>
+    </div>
+    <div class="strip" id="stripBox"></div>
+  </section>
+
+  <!-- MAP -->
+  <section id="vMap" class="hidden">
+    <div class="mapbar" id="mapbar"></div>
+    <div id="map"></div>
+  </section>
+
+  <!-- ROUTE -->
+  <section id="vRoute" class="hidden">
+    <div class="routewrap">
+      <div class="rleft">
+        <div class="panel">
+          <div class="frow"><label>출발</label><input id="inFrom" list="places" value="Union Suite (Sunway Avenue)"><button class="swap" id="btnSwap" title="바꾸기">⇅</button></div>
+          <div class="frow"><label>도착</label><input id="inTo" list="places" placeholder="역 이름 또는 장소 입력"></div>
+          <datalist id="places"></datalist>
+          <div class="quick"><span>자주 가는 곳:</span></div>
+          <button class="gobtn" id="btnGo">경로 찾기</button>
+        </div>
+        <div id="routeOut" class="routes"></div>
+        <div class="rhint" id="rHint"></div>
+      </div>
+      <div id="rmap"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  좌표 출처: OpenStreetMap (© OSM contributors) · 소요시간은 노선 평균 속도·배차 기반 <b>추정치</b>입니다(실시간 아님).
+  정확한 출발 시각과 버스 포함 경로는 각 경로의 <b>Google 길찾기</b> 버튼으로 확인하세요. KTM 코뮤터는 배차 간격(20분+)이 길어 대기시간 편차가 큽니다.
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const LINES = [{"id":"KJ","name":"LRT Kelana Jaya Line","kr":"LRT 켈라나자야선","color":"#D50032","type":"LRT","stations":[{"ref":"KJ1","name":"Gombak","lat":3.231218,"lon":101.724425},{"ref":"KJ2","name":"Taman Melati","lat":3.219527,"lon":101.721867},{"ref":"KJ3","name":"Wangsa Maju","lat":3.205753,"lon":101.731909},{"ref":"KJ4","name":"Sri Rampai","lat":3.199089,"lon":101.737349},{"ref":"KJ5","name":"Setiawangsa","lat":3.175739,"lon":101.735886},{"ref":"KJ6","name":"Jelatek","lat":3.167251,"lon":101.735316},{"ref":"KJ7","name":"Dato' Keramat","lat":3.165062,"lon":101.731855},{"ref":"KJ8","name":"Damai","lat":3.164473,"lon":101.724408},{"ref":"KJ9","name":"Ampang Park","lat":3.160106,"lon":101.719066},{"ref":"KJ10","name":"KLCC","lat":3.159247,"lon":101.713366},{"ref":"KJ11","name":"Kampung Baru","lat":3.161447,"lon":101.706926},{"ref":"KJ12","name":"Dang Wangi","lat":3.156709,"lon":101.702027},{"ref":"KJ13","name":"Masjid Jamek","lat":3.149408,"lon":101.696461},{"ref":"KJ14","name":"Pasar Seni","lat":3.142437,"lon":101.695307},{"ref":"KJ15","name":"KL Sentral","lat":3.134111,"lon":101.686515},{"ref":"KJ16","name":"Bangsar","lat":3.127451,"lon":101.679019},{"ref":"KJ17","name":"Abdullah Hukum","lat":3.118741,"lon":101.672933},{"ref":"KJ18","name":"Kerinchi","lat":3.115489,"lon":101.668495},{"ref":"KJ19","name":"Universiti","lat":3.114548,"lon":101.661702},{"ref":"KJ20","name":"Taman Jaya","lat":3.104059,"lon":101.645315},{"ref":"KJ21","name":"Asia Jaya","lat":3.104355,"lon":101.637734},{"ref":"KJ22","name":"Taman Paramount","lat":3.104702,"lon":101.623181},{"ref":"KJ23","name":"Taman Bahagia","lat":3.110693,"lon":101.612716},{"ref":"KJ24","name":"Kelana Jaya","lat":3.112454,"lon":101.604498},{"ref":"KJ25","name":"Lembah Subang","lat":3.112065,"lon":101.591303},{"ref":"KJ26","name":"Ara Damansara","lat":3.108432,"lon":101.586585},{"ref":"KJ27","name":"Glenmarie","lat":3.095923,"lon":101.590272},{"ref":"KJ28","name":"Subang Jaya","lat":3.084886,"lon":101.587285},{"ref":"KJ29","name":"KJ29 SS15","lat":3.075696,"lon":101.586179},{"ref":"KJ30","name":"KJ30 SS18","lat":3.067027,"lon":101.586189},{"ref":"KJ31","name":"USJ7","lat":3.054808,"lon":101.591979},{"ref":"KJ32","name":"Taipan","lat":3.047839,"lon":101.590153},{"ref":"KJ33","name":"Wawasan","lat":3.035052,"lon":101.588104},{"ref":"KJ34","name":"USJ21","lat":3.029733,"lon":101.581809},{"ref":"KJ35","name":"Alam Megah","lat":3.023024,"lon":101.572107},{"ref":"KJ36","name":"Subang Alam","lat":3.009603,"lon":101.572118},{"ref":"KJ37","name":"Putra Heights","lat":2.996048,"lon":101.575579}]},{"id":"AG","name":"LRT Ampang Line","kr":"LRT 암팡선","color":"#FF8200","type":"LRT","stations":[{"ref":"AG1","name":"Sentul Timur","lat":3.185913,"lon":101.695308},{"ref":"AG2","name":"Sentul","lat":3.178567,"lon":101.695487},{"ref":"AG3","name":"Titiwangsa","lat":3.173556,"lon":101.695247},{"ref":"AG4","name":"PWTC","lat":3.166566,"lon":101.693589},{"ref":"AG5","name":"Sultan Ismail","lat":3.161204,"lon":101.694126},{"ref":"AG6","name":"Bandaraya","lat":3.155515,"lon":101.694423},{"ref":"AG7","name":"Masjid Jamek","lat":3.149408,"lon":101.696461},{"ref":"AG8","name":"Plaza Rakyat","lat":3.144247,"lon":101.702088},{"ref":"AG9","name":"Hang Tuah","lat":3.139883,"lon":101.7063},{"ref":"AG10","name":"Pudu","lat":3.13494,"lon":101.712017},{"ref":"AG11","name":"Chan Sow Lin","lat":3.127772,"lon":101.715585},{"ref":"AG12","name":"Miharja","lat":3.120969,"lon":101.717835},{"ref":"AG13","name":"Maluri","lat":3.123268,"lon":101.726944},{"ref":"AG14","name":"Pandan Jaya","lat":3.130218,"lon":101.738962},{"ref":"AG15","name":"Pandan Indah","lat":3.13476,"lon":101.746695},{"ref":"AG16","name":"Cempaka","lat":3.138476,"lon":101.75303},{"ref":"AG17","name":"Cahaya","lat":3.140614,"lon":101.756591},{"ref":"AG18","name":"Ampang","lat":3.150354,"lon":101.760216}]},{"id":"SP","name":"LRT Sri Petaling Line","kr":"LRT 스리페탈링선","color":"#8B2331","type":"LRT","stations":[{"ref":"SP1","name":"Sentul Timur","lat":3.185913,"lon":101.695308},{"ref":"SP2","name":"Sentul","lat":3.178567,"lon":101.695487},{"ref":"SP3","name":"Titiwangsa","lat":3.173556,"lon":101.695247},{"ref":"SP4","name":"PWTC","lat":3.166566,"lon":101.693589},{"ref":"SP5","name":"Sultan Ismail","lat":3.161204,"lon":101.694126},{"ref":"SP6","name":"Bandaraya","lat":3.155515,"lon":101.694423},{"ref":"SP7","name":"Masjid Jamek","lat":3.149408,"lon":101.696461},{"ref":"SP8","name":"Plaza Rakyat","lat":3.144247,"lon":101.702088},{"ref":"SP9","name":"Hang Tuah","lat":3.139883,"lon":101.7063},{"ref":"SP10","name":"Pudu","lat":3.13494,"lon":101.712017},{"ref":"SP11","name":"Chan Sow Lin","lat":3.127772,"lon":101.715585},{"ref":"SP12","name":"Cheras","lat":3.112698,"lon":101.714301},{"ref":"SP13","name":"Salak Selatan","lat":3.102095,"lon":101.706289},{"ref":"SP14","name":"Bandar Tun Razak","lat":3.089636,"lon":101.712446},{"ref":"SP15","name":"Bandar Tasik Selatan","lat":3.076096,"lon":101.711333},{"ref":"SP16","name":"Sungai Besi","lat":3.063938,"lon":101.708011},{"ref":"SP17","name":"Bukit Jalil","lat":3.058138,"lon":101.692207},{"ref":"SP18","name":"Sri Petaling","lat":3.061403,"lon":101.687073},{"ref":"SP19","name":"Awan Besar","lat":3.062084,"lon":101.670632},{"ref":"SP20","name":"Muhibbah","lat":3.06193,"lon":101.662603},{"ref":"SP21","name":"Alam Sutera","lat":3.05466,"lon":101.656544},{"ref":"SP22","name":"Kinrara BK 5","lat":3.050447,"lon":101.644268},{"ref":"SP24","name":"IOI Puchong Jaya","lat":3.048133,"lon":101.621076},{"ref":"SP25","name":"Pusat Bandar Puchong","lat":3.033231,"lon":101.61609},{"ref":"SP26","name":"Taman Perindustrian Puchong","lat":3.02272,"lon":101.613536},{"ref":"SP27","name":"Bandar Puteri","lat":3.016947,"lon":101.612934},{"ref":"SP28","name":"Puchong Perdana","lat":3.007828,"lon":101.605279},{"ref":"SP29","name":"Puchong Prima","lat":2.999906,"lon":101.596663},{"ref":"SP31","name":"Putra Heights","lat":2.996048,"lon":101.575579}]},{"id":"SA","name":"LRT Shah Alam Line (LRT3)","kr":"LRT 샤알람선","color":"#00A9E0","type":"LRT","stations":[{"ref":"SA01","name":"Bandar Utama","lat":3.144919,"lon":101.619011},{"ref":"SA02","name":"Kayu Ara","lat":3.134912,"lon":101.616804},{"ref":"SA03","name":"BU 11 (Bandar Utama 11)","lat":3.133444,"lon":101.604667},{"ref":"SA05","name":"Damansara Idaman","lat":3.122846,"lon":101.594251},{"ref":"SA06","name":"Subang","lat":3.106236,"lon":101.591241},{"ref":"SA07","name":"Glenmarie 2","lat":3.095334,"lon":101.588802},{"ref":"SA09","name":"Kerjaya","lat":3.082289,"lon":101.561975},{"ref":"SA10","name":"Stadium Shah Alam","lat":3.079957,"lon":101.549119},{"ref":"SA12","name":"Dato' Menteri","lat":3.069934,"lon":101.521173},{"ref":"SA14","name":"Hub Seksyen 2","lat":3.071895,"lon":101.507666},{"ref":"SA15","name":"Seksyen 7 Shah Alam","lat":3.067461,"lon":101.486968},{"ref":"SA17","name":"Bandar Baru Klang","lat":3.06268,"lon":101.46593},{"ref":"SA18","name":"Pasar Klang","lat":3.067943,"lon":101.450851},{"ref":"SA19","name":"Jalan Meru","lat":3.059056,"lon":101.452059},{"ref":"SA20","name":"Jambatan Kota","lat":3.047497,"lon":101.447591},{"ref":"SA21","name":"Taman Selatan","lat":3.026849,"lon":101.442413},{"ref":"SA22","name":"Seri Andalas","lat":3.016041,"lon":101.440752},{"ref":"SA23","name":"Klang Jaya","lat":3.005438,"lon":101.441839},{"ref":"SA24","name":"Bandar Bukit Tinggi","lat":2.993258,"lon":101.445926},{"ref":"SA26","name":"Johan Setia","lat":2.976419,"lon":101.459353}]},{"id":"KG","name":"MRT Kajang Line","kr":"MRT 카장선","color":"#028940","type":"MRT","stations":[{"ref":"KG04","name":"Kwasa Damansara","lat":3.176309,"lon":101.572399},{"ref":"KG05","name":"Kwasa Sentral","lat":3.169833,"lon":101.564838},{"ref":"KG06","name":"Kota Damansara","lat":3.150179,"lon":101.578735},{"ref":"KG07","name":"Surian","lat":3.149599,"lon":101.593708},{"ref":"KG08","name":"Mutiara Damansara","lat":3.15519,"lon":101.608824},{"ref":"KG09","name":"Bandar Utama","lat":3.146648,"lon":101.61881},{"ref":"KG10","name":"Taman Tun Dr Ismail","lat":3.136029,"lon":101.630857},{"ref":"KG12","name":"Phileo Damansara","lat":3.129215,"lon":101.642956},{"ref":"KG13","name":"Pusat Bandar Damansara","lat":3.143278,"lon":101.662378},{"ref":"KG14","name":"Semantan","lat":3.150961,"lon":101.665358},{"ref":"KG15","name":"Muzium Negara","lat":3.137135,"lon":101.687336},{"ref":"KG16","name":"Pasar Seni","lat":3.142418,"lon":101.69629},{"ref":"KG17","name":"Merdeka","lat":3.142903,"lon":101.702193},{"ref":"KG18A","name":"Bukit Bintang","lat":3.146443,"lon":101.710895},{"ref":"KG20","name":"Tun Razak Exchange","lat":3.142808,"lon":101.719962},{"ref":"KG21","name":"Cochrane","lat":3.132479,"lon":101.723003},{"ref":"KG22","name":"Maluri","lat":3.124533,"lon":101.727214},{"ref":"KG23","name":"Taman Pertama","lat":3.112639,"lon":101.729303},{"ref":"KG24","name":"Taman Midah","lat":3.104429,"lon":101.732241},{"ref":"KG25","name":"Taman Mutiara","lat":3.091303,"lon":101.740391},{"ref":"KG26","name":"Taman Connaught","lat":3.079186,"lon":101.74514},{"ref":"KG27","name":"Taman Suntex","lat":3.071607,"lon":101.76348},{"ref":"KG28","name":"Sri Raya","lat":3.062177,"lon":101.773},{"ref":"KG29","name":"Bandar Tun Hussein Onn","lat":3.048359,"lon":101.775013},{"ref":"KG30","name":"Batu 11 Cheras","lat":3.041304,"lon":101.773344},{"ref":"KG31","name":"Bukit Dukung","lat":3.026387,"lon":101.771094},{"ref":"KG33","name":"Sungai Jernih","lat":3.000839,"lon":101.784125},{"ref":"KG34","name":"Stadium Kajang","lat":2.994056,"lon":101.786199},{"ref":"KG35","name":"Kajang","lat":2.983104,"lon":101.790329}]},{"id":"PY","name":"MRT Putrajaya Line","kr":"MRT 푸트라자야선","color":"#F5C400","type":"MRT","stations":[{"ref":"PY01","name":"Kwasa Damansara","lat":3.176309,"lon":101.572399},{"ref":"PY03","name":"Kampung Selamat","lat":3.19717,"lon":101.57841},{"ref":"PY04","name":"Sungai Buloh","lat":3.206265,"lon":101.581841},{"ref":"PY05","name":"Damansara Damai","lat":3.199754,"lon":101.592902},{"ref":"PY06","name":"Sri Damansara Barat","lat":3.198229,"lon":101.608411},{"ref":"PY07","name":"Sri Damansara Sentral","lat":3.198541,"lon":101.621133},{"ref":"PY08","name":"Sri Damansara Timur","lat":3.207625,"lon":101.628615},{"ref":"PY09","name":"Metro Prima","lat":3.214508,"lon":101.640391},{"ref":"PY10","name":"Kepong Baru","lat":3.21168,"lon":101.648192},{"ref":"PY11","name":"Jinjang","lat":3.209523,"lon":101.655804},{"ref":"PY12","name":"Sri Delima","lat":3.20721,"lon":101.665565},{"ref":"PY13","name":"Kampung Batu","lat":3.205999,"lon":101.675132},{"ref":"PY14","name":"Kentonmen","lat":3.195486,"lon":101.679606},{"ref":"PY15","name":"Jalan Ipoh","lat":3.189411,"lon":101.681123},{"ref":"PY16","name":"Sentul Barat","lat":3.178947,"lon":101.685155},{"ref":"PY17","name":"Titiwangsa","lat":3.174453,"lon":101.696301},{"ref":"PY18","name":"Hospital Kuala Lumpur","lat":3.173781,"lon":101.701527},{"ref":"PY19","name":"Raja Uda","lat":3.16785,"lon":101.711138},{"ref":"PY20","name":"Ampang Park","lat":3.161737,"lon":101.717979},{"ref":"PY21","name":"Persiaran KLCC","lat":3.156847,"lon":101.718069},{"ref":"PY22","name":"Conlay","lat":3.150907,"lon":101.718403},{"ref":"PY23","name":"Tun Razak Exchange","lat":3.142808,"lon":101.719962},{"ref":"PY24","name":"Chan Sow Lin","lat":3.128375,"lon":101.716593},{"ref":"PY27","name":"Kuchai","lat":3.08958,"lon":101.694098},{"ref":"PY28","name":"Taman Naga Emas","lat":3.077718,"lon":101.699533},{"ref":"PY29","name":"Sungai Besi","lat":3.063867,"lon":101.708413},{"ref":"PY31","name":"Serdang Raya Utara","lat":3.041714,"lon":101.704911},{"ref":"PY32","name":"Serdang Raya Selatan","lat":3.028481,"lon":101.707498},{"ref":"PY33","name":"Serdang Jaya","lat":3.021553,"lon":101.708938},{"ref":"PY34","name":"UPM","lat":3.008488,"lon":101.705391},{"ref":"PY36","name":"Taman Equine","lat":2.989342,"lon":101.672585},{"ref":"PY37","name":"Putra Permai","lat":2.983111,"lon":101.660578},{"ref":"PY38","name":"16 Sierra","lat":2.965287,"lon":101.654866},{"ref":"PY39","name":"Cyberjaya Utara","lat":2.949234,"lon":101.657492},{"ref":"PY40","name":"Cyberjaya City Centre","lat":2.938966,"lon":101.66561},{"ref":"PY41","name":"Putrajaya Sentral","lat":2.931411,"lon":101.671474}]},{"id":"MR","name":"KL Monorail","kr":"KL 모노레일","color":"#84BD00","type":"Monorail","stations":[{"ref":"MR1","name":"KL Sentral","lat":3.132733,"lon":101.687864},{"ref":"MR2","name":"Tun Sambanthan","lat":3.131453,"lon":101.690871},{"ref":"MR3","name":"Maharajalela","lat":3.138958,"lon":101.699188},{"ref":"MR4","name":"Hang Tuah","lat":3.140733,"lon":101.70601},{"ref":"MR5","name":"Imbi","lat":3.142803,"lon":101.709423},{"ref":"MR6","name":"Bukit Bintang","lat":3.146073,"lon":101.711482},{"ref":"MR7","name":"Raja Chulan","lat":3.150887,"lon":101.710434},{"ref":"MR8","name":"Bukit Nanas","lat":3.156113,"lon":101.704861},{"ref":"MR9","name":"Medan Tuanku","lat":3.159285,"lon":101.698921},{"ref":"MR10","name":"Chow Kit","lat":3.167402,"lon":101.69838},{"ref":"MR11","name":"Titiwangsa","lat":3.173188,"lon":101.696003}]},{"id":"PK","name":"KTM Port Klang Line","kr":"KTM 포트클랑선 (코뮤터)","color":"#C8102E","type":"KTM","stations":[{"ref":"KA11","name":"Serendah","lat":3.376051,"lon":101.614482},{"ref":"KA10","name":"Rawang","lat":3.318904,"lon":101.575019},{"ref":"KA09","name":"Kuang","lat":3.258262,"lon":101.554679},{"ref":"KA08","name":"Sungai Buloh","lat":3.206244,"lon":101.579992},{"ref":"KA07","name":"Kepong Sentral","lat":3.208715,"lon":101.628534},{"ref":"KA06","name":"Kepong","lat":3.20281,"lon":101.637395},{"ref":"KA05A","name":"Segambut Utara","lat":3.192001,"lon":101.655163},{"ref":"KA05","name":"Segambut","lat":3.18644,"lon":101.664199},{"ref":"KA04","name":"Putra","lat":3.16556,"lon":101.690793},{"ref":"KA03","name":"Bank Negara","lat":3.154442,"lon":101.692917},{"ref":"KA02","name":"Kuala Lumpur","lat":3.140786,"lon":101.693767},{"ref":"HUB_KLSENTRAL","name":"KL Sentral","lat":3.134283,"lon":101.686385},{"ref":"KD01","name":"Abdullah Hukum","lat":3.118864,"lon":101.673276},{"ref":"KD02","name":"Angkasapuri","lat":3.112685,"lon":101.673438},{"ref":"KD03","name":"Pantai Dalam","lat":3.09563,"lon":101.670051},{"ref":"KD04","name":"Petaling","lat":3.086074,"lon":101.66423},{"ref":"KD05","name":"Jalan Templer","lat":3.083469,"lon":101.656498},{"ref":"KD06","name":"Kampung Dato Harun","lat":3.084458,"lon":101.632297},{"ref":"KD07","name":"Seri Setia","lat":3.084513,"lon":101.621955},{"ref":"KD08","name":"Setia Jaya","lat":3.083176,"lon":101.611426},{"ref":"KD09","name":"Subang Jaya","lat":3.084594,"lon":101.587426},{"ref":"KD10","name":"Batu Tiga","lat":3.075842,"lon":101.559577},{"ref":"KD11","name":"Shah Alam","lat":3.056369,"lon":101.525339},{"ref":"KD12","name":"Padang Jawa","lat":3.05246,"lon":101.492743},{"ref":"KD13","name":"Bukit Badak","lat":3.036263,"lon":101.470303},{"ref":"KD14","name":"Klang","lat":3.043093,"lon":101.449668},{"ref":"KD15","name":"Teluk Pulai","lat":3.040862,"lon":101.432096},{"ref":"KD16","name":"Teluk Gadong","lat":3.033997,"lon":101.424914},{"ref":"KD17","name":"Kampung Raja Uda","lat":3.020148,"lon":101.410251},{"ref":"KD18","name":"Jalan Kastam","lat":3.013032,"lon":101.402632},{"ref":"KD19","name":"Pelabuhan Klang","lat":2.999526,"lon":101.391466}]},{"id":"SR","name":"KTM Seremban Line (Batu Caves–Pulau Sebang)","kr":"KTM 세렘반선 (코뮤터)","color":"#1D4F91","type":"KTM","stations":[{"ref":"KC05","name":"Batu Caves","lat":3.237781,"lon":101.681443},{"ref":"KC04","name":"Taman Wahyu","lat":3.214493,"lon":101.672187},{"ref":"KC03","name":"Kampung Batu","lat":3.2048,"lon":101.675642},{"ref":"KC02","name":"Batu Kentonmen","lat":3.198283,"lon":101.681215},{"ref":"KC01","name":"Sentul","lat":3.182215,"lon":101.688763},{"ref":"KA03","name":"Bank Negara","lat":3.154442,"lon":101.692917},{"ref":"KA02","name":"Kuala Lumpur","lat":3.140786,"lon":101.693767},{"ref":"HUB_KLSENTRAL","name":"KL Sentral","lat":3.134283,"lon":101.686385},{"ref":"KB01","name":"Mid Valley","lat":3.118677,"lon":101.678876},{"ref":"KB02","name":"Seputeh","lat":3.113687,"lon":101.68142},{"ref":"KB03","name":"Salak Selatan","lat":3.098311,"lon":101.704987},{"ref":"KB04","name":"Bandar Tasik Selatan","lat":3.076292,"lon":101.711088},{"ref":"KB05","name":"Serdang","lat":3.02352,"lon":101.715933},{"ref":"KB06","name":"Kajang","lat":2.982675,"lon":101.79053},{"ref":"KB06A","name":"Kajang 2","lat":2.962545,"lon":101.792063},{"ref":"KB07","name":"UKM","lat":2.939578,"lon":101.787787},{"ref":"KB08","name":"Bangi","lat":2.903996,"lon":101.786105},{"ref":"KB09","name":"Batang Benar","lat":2.830453,"lon":101.826998},{"ref":"KB10","name":"Nilai","lat":2.80298,"lon":101.800261},{"ref":"KB11","name":"Labu","lat":2.754229,"lon":101.826567},{"ref":"KB12","name":"Tiroi","lat":2.741214,"lon":101.871775},{"ref":"KB13","name":"Seremban","lat":2.71863,"lon":101.94081}]},{"id":"B1","name":"BRT Sunway Line","kr":"BRT 선웨이선","color":"#00857D","type":"BRT","stations":[{"ref":"SB1","name":"Sunway-Setia Jaya","lat":3.0829,"lon":101.61226},{"ref":"SB2","name":"Mentari","lat":3.07611,"lon":101.61018},{"ref":"SB3","name":"Sunway Lagoon","lat":3.07064,"lon":101.6107},{"ref":"SB4","name":"SunMed","lat":3.06554,"lon":101.60861},{"ref":"SB5","name":"SunU-Monash","lat":3.06533,"lon":101.60154},{"ref":"SB6","name":"South Quay-USJ1","lat":3.06163,"lon":101.59678},{"ref":"SB7","name":"USJ7","lat":3.055287,"lon":101.591977}]},{"id":"ERL","name":"KLIA Transit (ERL)","kr":"KLIA 트랜짓 (공항철도)","color":"#6C2C91","type":"ERL","stations":[{"ref":"HUB_KLSENTRAL","name":"KL Sentral","lat":3.134283,"lon":101.686385},{"ref":"ERL_BTS","name":"Bandar Tasik Selatan","lat":3.076305,"lon":101.710324},{"ref":"ERL_PJY","name":"Putrajaya/Cyberjaya","lat":2.93183,"lon":101.671018},{"ref":"ERL_ST","name":"Salak Tinggi","lat":2.825397,"lon":101.713075},{"ref":"ERL_T1","name":"KLIA T1","lat":2.754733,"lon":101.70464},{"ref":"ERL_T2","name":"KLIA T2","lat":2.744527,"lon":101.68518}]}];
+
+// ---------- POIs ----------
+const POIS = [
+  {id:'home', name:'Union Suite (Sunway Avenue)', kr:'유니온 스위트 · 선웨이 애비뉴몰', lat:3.0612, lon:101.6100, icon:'🏠'},
+  {id:'ucsi', name:'UCSI Subang Jaya (SS13)', kr:'UCSI 수방자야 캠퍼스', lat:3.0692, lon:101.5964, icon:'🎓'},
+  {id:'klcc', name:'KLCC (Petronas Twin Towers)', kr:'KLCC 페트로나스 트윈타워', lat:3.1579, lon:101.7116, icon:'🏙️'},
+  {id:'mk',   name:'Mont Kiara', kr:'몽키아라', lat:3.1656, lon:101.6520, icon:'🌆'},
+  {id:'pch',  name:'Puchong (Pusat Bandar)', kr:'푸총 중심가', lat:3.0332, lon:101.6161, icon:'🏘️'},
+  {id:'bb',   name:'Bukit Bintang', kr:'부킷빈탕', lat:3.1466, lon:101.7110, icon:'🛍️'},
+  {id:'mv',   name:'Mid Valley Megamall', kr:'미드밸리', lat:3.1177, lon:101.6774, icon:'🛒'},
+  {id:'sent', name:'KL Sentral', kr:'KL 센트럴', lat:3.1343, lon:101.6864, icon:'🚉'},
+  {id:'sunw', name:'Sunway Pyramid', kr:'선웨이 피라미드', lat:3.0722, lon:101.6070, icon:'🛍️'},
+  {id:'klia', name:'KLIA (공항)', kr:'쿠알라룸푸르 국제공항', lat:2.7547, lon:101.7046, icon:'✈️'},
+];
+const HOME = POIS[0];
+
+// ---------- helpers ----------
+const R = 6371;
+function distKm(a, b){
+  const dLat=(b.lat-a.lat)*Math.PI/180, dLon=(b.lon-a.lon)*Math.PI/180;
+  const x=Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+const SPEED = {LRT:36, MRT:42, Monorail:24, KTM:45, BRT:22, ERL:60};   // km/h
+const DWELL = {LRT:.7, MRT:.7, Monorail:.7, KTM:1.2, BRT:.6, ERL:1.5}; // min/stop
+const HEADWAY = {LRT:5, MRT:5, Monorail:7, KTM:22, BRT:9, ERL:20};     // min
+const WALK_KMH = 4.5, WALK_FACTOR = 1.3;
+function walkMin(km){ return km*WALK_FACTOR/WALK_KMH*60; }
+function fmtMin(m){ m=Math.round(m); return m>=60 ? Math.floor(m/60)+'시간 '+(m%60)+'분' : m+'분'; }
+
+// ---------- graph ----------
+// node = {line, idx, st}
+const nodes=[]; const nodeIdx=new Map();
+LINES.forEach(L=>L.stations.forEach((st,i)=>{
+  const id=L.id+':'+i; nodeIdx.set(id,nodes.length);
+  nodes.push({id, line:L, idx:i, st});
+}));
+const adj = nodes.map(()=>[]);
+// ride edges
+LINES.forEach(L=>{
+  for(let i=0;i<L.stations.length-1;i++){
+    const a=nodeIdx.get(L.id+':'+i), b=nodeIdx.get(L.id+':'+(i+1));
+    const t = distKm(L.stations[i],L.stations[i+1])/SPEED[L.type]*60 + DWELL[L.type];
+    adj[a].push({to:b,t,kind:'ride'}); adj[b].push({to:a,t,kind:'ride'});
+  }
+});
+// transfer edges (different lines, within 500m or same name within 700m)
+for(let a=0;a<nodes.length;a++) for(let b=a+1;b<nodes.length;b++){
+  const A=nodes[a], B=nodes[b];
+  if(A.line.id===B.line.id) continue;
+  const d=distKm(A.st,B.st);
+  const sameName = A.st.name===B.st.name;
+  if(d<0.5 || (sameName && d<0.75)){
+    const w=Math.max(2, walkMin(d)+2); // min 2분 + 이동
+    adj[a].push({to:b,t:w,kind:'xfer'}); adj[b].push({to:a,t:w,kind:'xfer'});
+  }
+}
+// interchange map for badges
+const xferAt = nodes.map((n,i)=> {
+  const s=new Set();
+  adj[i].forEach(e=>{ if(e.kind==='xfer') s.add(nodes[e.to].line.id); });
+  return [...s];
+});
+
+// nearest stations to a point
+function nearest(pt, maxKm=1.6, cap=5){
+  const cand=[];
+  const seen=new Set();
+  nodes.forEach((n,i)=>{
+    const d=distKm(pt,n.st);
+    if(d<=maxKm){ const key=n.line.id+n.st.name; if(seen.has(key))return; seen.add(key); cand.push({i,d}); }
+  });
+  cand.sort((x,y)=>x.d-y.d);
+  return cand.slice(0,cap);
+}
+
+// Dijkstra with transfer penalty weighting
+function dijkstra(srcList, dstList, xferPenalty){
+  const dist=new Array(nodes.length).fill(Infinity), prev=new Array(nodes.length).fill(-1), prevEdge=new Array(nodes.length).fill(null);
+  const srcExtra={};
+  const pq=[];
+  srcList.forEach(s=>{
+    const t = s.t + HEADWAY[nodes[s.i].line.type]/2;
+    if(t<dist[s.i]){ dist[s.i]=t; srcExtra[s.i]=s; pq.push([t,s.i]); }
+  });
+  while(pq.length){
+    pq.sort((a,b)=>a[0]-b[0]);
+    const [d,u]=pq.shift();
+    if(d>dist[u]) continue;
+    for(const e of adj[u]){
+      let w=e.t;
+      if(e.kind==='xfer') w += HEADWAY[nodes[e.to].line.type]/2 + xferPenalty;
+      if(dist[u]+w<dist[e.to]-1e-9){
+        dist[e.to]=dist[u]+w; prev[e.to]=u; prevEdge[e.to]=e; pq.push([dist[e.to],e.to]);
+      }
+    }
+  }
+  let best=null;
+  dstList.forEach(dd=>{
+    const tot=dist[dd.i]+dd.t;
+    if(dist[dd.i]<Infinity && (!best || tot<best.tot)) best={tot, end:dd};
+  });
+  if(!best) return null;
+  const path=[]; let u=best.end.i;
+  while(u!==-1){ path.unshift(u); u=prev[u]; }
+  return {path, tot:best.tot, src:srcExtra[path[0]], dst:best.end};
+}
+
+// group path into legs
+function buildLegs(res){
+  const legs=[];
+  const p=res.path;
+  let i=0;
+  legs.push({kind:'walk', t:res.src.t, from:null, to:nodes[p[0]], wait:HEADWAY[nodes[p[0]].line.type]/2});
+  while(i<p.length-1){
+    const L=nodes[p[i]].line;
+    let j=i, t=0;
+    while(j<p.length-1 && nodes[p[j+1]].line.id===L.id){
+      t += adj[p[j]].find(e=>e.to===p[j+1] && e.kind==='ride')?.t ?? 0;
+      j++;
+    }
+    if(j>i) legs.push({kind:'ride', line:L, from:nodes[p[i]], to:nodes[p[j]], stops:j-i, t});
+    if(j<p.length-1){ // transfer edge
+      const w = adj[p[j]].find(e=>e.to===p[j+1]);
+      legs.push({kind:'xfer', from:nodes[p[j]], to:nodes[p[j+1]], t:w?w.t:3, wait:HEADWAY[nodes[p[j+1]].line.type]/2});
+      j++;
+    }
+    i=j;
+  }
+  legs.push({kind:'walk-out', t:res.dst.t, from:nodes[p[p.length-1]]});
+  return legs;
+}
+
+// ---------- resolve place ----------
+function allPlaces(){
+  const arr=[];
+  POIS.forEach(p=>arr.push({label:p.icon+' '+p.name, name:p.name, lat:p.lat, lon:p.lon, poi:true}));
+  const seen=new Set();
+  nodes.forEach(n=>{
+    const key=n.st.name;
+    if(seen.has(key)) return; seen.add(key);
+    arr.push({label:'🚉 '+n.st.name+' ['+n.line.type+']', name:n.st.name, lat:n.st.lat, lon:n.st.lon});
+  });
+  return arr;
+}
+const PLACES=allPlaces();
+function resolvePlace(q){
+  q=(q||'').trim().toLowerCase().replace(/^[^\w가-힣]+/,'');
+  if(!q) return null;
+  let hit = PLACES.find(p=>p.name.toLowerCase()===q) ||
+            PLACES.find(p=>p.label.toLowerCase().includes(q)) ||
+            PLACES.find(p=>p.name.toLowerCase().includes(q));
+  return hit||null;
+}
+
+// ---------- UI: tabs ----------
+const views={lines:vLines, map:vMap, route:vRoute, detail:vDetail};
+const tabs={lines:tabLines, map:tabMap, route:tabRoute};
+let map=null;
+function show(v){
+  Object.values(views).forEach(x=>x.classList.add('hidden'));
+  views[v].classList.remove('hidden');
+  Object.entries(tabs).forEach(([k,b])=>b.classList.toggle('on', k===v||(v==='detail'&&k==='lines')));
+  document.querySelector('main').classList.toggle('wide', v==='route');
+  if(v==='map'){ initMap(); setTimeout(()=>map.invalidateSize(),50); }
+  if(v==='route'){ initRMap(); setTimeout(()=>rmap.invalidateSize(),50); }
+}
+tabLines.onclick=()=>show('lines');
+tabMap.onclick=()=>{ show('map'); focusLine(null); };
+tabRoute.onclick=()=>show('route');
+
+// ---------- line cards ----------
+const homeNear = new Set(nearest(HOME,1.6,8).map(c=>nodes[c.i].line.id));
+LINES.forEach(L=>{
+  const el=document.createElement('div'); el.className='lcard';
+  el.innerHTML=`<div class="chip" style="background:${L.color}${L.id==='PY'?';color:#333':''}">${L.id}</div>
+    <div><div class="nm">${L.kr} ${homeNear.has(L.id)?'<span class="nearhome">🏠 인근</span>':''}</div>
+    <div class="meta">${L.name} · ${L.stations.length}개 역</div></div>`;
+  el.onclick=()=>openDetail(L);
+  lineCards.appendChild(el);
+});
+
+// ---------- line detail ----------
+let curLine=null;
+function openDetail(L){
+  curLine=L; show('detail');
+  dChip.textContent=L.id; dChip.style.background=L.color; dChip.style.color = L.id==='PY'?'#333':'#fff';
+  dName.textContent=L.kr; dMeta.textContent=`${L.name} · ${L.stations[0].name} ↔ ${L.stations[L.stations.length-1].name}`;
+  dvStrip.classList.add('on'); dvMap.classList.remove('on');
+  renderStrip(L);
+}
+btnBack.onclick=()=>show('lines');
+dvStrip.onclick=()=>{ dvStrip.classList.add('on'); dvMap.classList.remove('on'); renderStrip(curLine); };
+dvMap.onclick=()=>{ show('map'); focusLine(curLine); };
+
+function renderStrip(L){
+  stripBox.innerHTML='';
+  L.stations.forEach((st,i)=>{
+    const ni=nodeIdx.get(L.id+':'+i);
+    const xf=xferAt[ni];
+    const nearHome = distKm(HOME,st)<1.6;
+    const row=document.createElement('div'); row.className='srow'; row.style.color=L.color;
+    row.innerHTML=`<div class="sdotcol"><div class="sdot ${xf.length?'xfer':''}"></div><div class="sline"></div></div>
+      <div class="sinfo"><div><span class="snm" style="color:var(--ink)">${st.name}</span><span class="sref">${st.ref.replace(/^(HUB_|ERL_)/,'')}</span>
+      ${nearHome?'<span class="nearhome">🏠</span>':''}</div>
+      ${xf.length?`<div class="badges">${xf.map(id=>{const XL=LINES.find(l=>l.id===id);return `<span class="badge" style="background:${XL.color}${id==='PY'?';color:#333':''}">${XL.kr.replace(/^(LRT|MRT|KTM|BRT|KL) ?/,'')} 환승</span>`}).join('')}</div>`:''}</div>`;
+    row.onclick=()=>{ show('map'); focusLine(L); map.setView([st.lat,st.lon],15); };
+    stripBox.appendChild(row);
+  });
+}
+
+// ---------- map ----------
+let lineLayers={}, stationLayers={}, routeLayer=null;
+function initMap(){
+  if(map) return;
+  map=L.map('map').setView([HOME.lat,HOME.lon],13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
+  LINES.forEach(Ln=>{
+    const latlngs=Ln.stations.map(s=>[s.lat,s.lon]);
+    const poly=L.polyline(latlngs,{color:Ln.color,weight:5,opacity:.85});
+    const grp=L.layerGroup([poly]);
+    Ln.stations.forEach((s,i)=>{
+      const ni=nodeIdx.get(Ln.id+':'+i);
+      const xf=xferAt[ni];
+      const m=L.circleMarker([s.lat,s.lon],{radius:xf.length?6:4.5,color:Ln.color,weight:2.5,fillColor:'#fff',fillOpacity:1});
+      m.bindPopup(`<b>${s.name}</b> <small>(${s.ref.replace(/^(HUB_|ERL_)/,'')})</small><br>${Ln.kr}${xf.length?'<br>환승: '+xf.map(id=>LINES.find(l=>l.id===id).kr).join(', '):''}<br><small>Union Suite에서 ${distKm(HOME,s).toFixed(1)}km</small>`);
+      grp.addLayer(m);
+    });
+    grp.addTo(map);
+    lineLayers[Ln.id]=grp;
+  });
+  // home & school markers
+  const homeIcon=L.divIcon({html:'<div style="font-size:26px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))">🏠</div>',className:'',iconSize:[26,26],iconAnchor:[13,24]});
+  L.marker([HOME.lat,HOME.lon],{icon:homeIcon,zIndexOffset:1000}).addTo(map).bindPopup('<b>Union Suite / Sunway Avenue</b><br>출발 기준점');
+  const schIcon=L.divIcon({html:'<div style="font-size:24px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))">🎓</div>',className:'',iconSize:[24,24],iconAnchor:[12,22]});
+  L.marker([POIS[1].lat,POIS[1].lon],{icon:schIcon,zIndexOffset:1000}).addTo(map).bindPopup('<b>UCSI Subang Jaya</b>');
+  // map filter bar
+  const all=document.createElement('button'); all.textContent='전체'; all.className='on';
+  all.onclick=()=>focusLine(null);
+  mapbar.appendChild(all);
+  LINES.forEach(Ln=>{
+    const b=document.createElement('button'); b.textContent=Ln.id; b.dataset.line=Ln.id;
+    b.onclick=()=>focusLine(Ln);
+    mapbar.appendChild(b);
+  });
+}
+function focusLine(Ln){
+  initMap();
+  [...mapbar.children].forEach(b=>{
+    const on = Ln ? b.dataset.line===Ln.id : !b.dataset.line;
+    b.classList.toggle('on',on);
+    b.style.background = on ? (Ln?Ln.color:'#12203a') : '#fff';
+    b.style.color = on ? (Ln&&Ln.id==='PY'?'#333':'#fff') : '#1c1e26';
+  });
+  Object.entries(lineLayers).forEach(([id,grp])=>{
+    grp.eachLayer(l=>{
+      const dim = Ln && id!==Ln.id;
+      if(l.setStyle) l.setStyle({opacity:dim?.15:.85, fillOpacity:dim?.15:1});
+    });
+  });
+  if(Ln){
+    const b=L.latLngBounds(Ln.stations.map(s=>[s.lat,s.lon]));
+    map.fitBounds(b,{padding:[30,30]});
+  } else map.setView([HOME.lat,HOME.lon],12.5);
+}
+
+// ---------- route planner ----------
+PLACES.forEach(p=>{ const o=document.createElement('option'); o.value=p.name; o.label=p.label; places.appendChild(o); });
+const quick=document.querySelector('.quick');
+POIS.slice(1).forEach(p=>{ const b=document.createElement('button'); b.textContent=p.icon+' '+p.kr; b.onclick=()=>{ inTo.value=p.name; doRoute(); }; quick.appendChild(b); });
+btnSwap.onclick=()=>{ const t=inFrom.value; inFrom.value=inTo.value; inTo.value=t; };
+btnGo.onclick=doRoute;
+[inFrom,inTo].forEach(el=>el.addEventListener('keydown',e=>{ if(e.key==='Enter') doRoute(); }));
+
+// ---------- route map (only the found route is drawn) ----------
+let rmap=null, rLayer=null;
+function initRMap(){
+  if(rmap) return;
+  rmap=L.map('rmap').setView([HOME.lat,HOME.lon],13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'© OpenStreetMap'}).addTo(rmap);
+  const homeIcon=L.divIcon({html:'<div style="font-size:24px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))">🏠</div>',className:'',iconSize:[24,24],iconAnchor:[12,22]});
+  L.marker([HOME.lat,HOME.lon],{icon:homeIcon}).addTo(rmap).bindPopup('<b>Union Suite / Sunway Avenue</b>');
+  rLayer=L.layerGroup().addTo(rmap);
+}
+const walkCache={};
+function drawWalk(a,b,label){
+  // straight dashed line immediately; upgrade to real foot path via OSRM if available
+  const straight=L.polyline([[a.lat,a.lon],[b.lat,b.lon]],{color:'#475569',weight:4,opacity:.85,dashArray:'2 9',lineCap:'round'});
+  straight.bindPopup('🚶 '+label);
+  rLayer.addLayer(straight);
+  const key=[a.lat,a.lon,b.lat,b.lon].map(x=>x.toFixed(5)).join(',');
+  const draw=coords=>{
+    if(!rLayer.hasLayer(straight)) return; // route was redrawn meanwhile
+    const real=L.polyline(coords,{color:'#475569',weight:4,opacity:.9,dashArray:'2 9',lineCap:'round'});
+    real.bindPopup('🚶 '+label);
+    rLayer.removeLayer(straight); rLayer.addLayer(real);
+  };
+  if(walkCache[key]){ if(walkCache[key]!=='fail') draw(walkCache[key]); return; }
+  if(distKm(a,b)>3){ walkCache[key]='fail'; return; }
+  fetch(`https://routing.openstreetmap.de/routed-foot/route/v1/foot/${a.lon},${a.lat};${b.lon},${b.lat}?overview=full&geometries=geojson`)
+    .then(r=>r.ok?r.json():Promise.reject())
+    .then(j=>{
+      const coords=j.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]);
+      walkCache[key]=coords; draw(coords);
+    }).catch(()=>{ walkCache[key]='fail'; });
+}
+function ptIcon(emoji,size){ return L.divIcon({html:`<div style="font-size:${size}px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))">${emoji}</div>`,className:'',iconSize:[size,size],iconAnchor:[size/2,size-2]}); }
+function drawRoute(r,A,B){
+  initRMap(); rLayer.clearLayers();
+  const bounds=[];
+  const addPt=(p)=>bounds.push([p.lat,p.lon]);
+  rLayer.addLayer(L.marker([A.lat,A.lon],{icon:ptIcon('🟢',20),zIndexOffset:900}).bindPopup('<b>출발</b> '+A.name));
+  rLayer.addLayer(L.marker([B.lat,B.lon],{icon:ptIcon('📍',26),zIndexOffset:900}).bindPopup('<b>도착</b> '+B.name));
+  addPt(A); addPt(B);
+  if(r.walkOnly){
+    drawWalk(A,B,`${A.name} → ${B.name} (${fmtMin(r.tot)})`);
+  } else {
+    const legs=buildLegs(r.res);
+    legs.forEach(l=>{
+      if(l.kind==='walk'){ drawWalk(A,l.to.st,`${A.name} → ${l.to.st.name}역 (${fmtMin(l.t)})`); addPt(l.to.st); }
+      else if(l.kind==='ride'){
+        const lo=Math.min(l.from.idx,l.to.idx), hi=Math.max(l.from.idx,l.to.idx);
+        const pts=l.line.stations.slice(lo,hi+1).map(s=>[s.lat,s.lon]);
+        const poly=L.polyline(pts,{color:l.line.color,weight:6,opacity:.95});
+        poly.bindPopup(`<b style="color:${l.line.color}">${l.line.kr}</b><br>${l.from.st.name} → ${l.to.st.name} (${l.stops}개 역)`);
+        rLayer.addLayer(poly);
+        pts.forEach(p=>bounds.push(p));
+        [l.from,l.to].forEach(n=>rLayer.addLayer(L.circleMarker([n.st.lat,n.st.lon],{radius:6,color:l.line.color,weight:3,fillColor:'#fff',fillOpacity:1}).bindPopup(`<b>${n.st.name}</b><br>${l.line.kr}`)));
+      }
+      else if(l.kind==='xfer'){ drawWalk(l.from.st,l.to.st,`환승: ${l.from.st.name} → ${l.to.st.name}`); }
+      else if(l.kind==='walk-out'){ drawWalk(l.from.st,B,`${l.from.st.name}역 → ${B.name} (${fmtMin(l.t)})`); }
+    });
+  }
+  rmap.fitBounds(L.latLngBounds(bounds),{padding:[36,36]});
+}
+function selectRoute(ix){
+  curResults.list.forEach((r,i)=>{ if(r.card) r.card.classList.toggle('sel', i===ix); });
+  const r=curResults.list[ix];
+  drawRoute(r, curResults.A, curResults.B);
+}
+let curResults={list:[],A:null,B:null};
+function doRoute(){
+  routeOut.innerHTML=''; rHint.textContent='';
+  if(rLayer) rLayer.clearLayers();
+  const A=resolvePlace(inFrom.value), B=resolvePlace(inTo.value);
+  if(!A||!B){ routeOut.innerHTML='<div class="err">출발지/도착지를 목록에서 선택하거나 정확히 입력해주세요. (역 이름 일부만 입력해도 됩니다)</div>'; return; }
+  if(A.name===B.name){ routeOut.innerHTML='<div class="err">출발지와 도착지가 같습니다.</div>'; return; }
+  const direct=distKm(A,B);
+  const results=[];
+  const srcs=nearest(A).map(c=>({i:c.i,t:walkMin(c.d)}));
+  const dsts=nearest(B).map(c=>({i:c.i,t:walkMin(c.d)}));
+  if(!srcs.length||!dsts.length){
+    routeOut.innerHTML='<div class="err">도보 1.6km 내 역이 없는 지역입니다. Google 길찾기(버스 포함)를 이용하세요. '+gmapsLink(A,B,'link')+'</div>';
+    return;
+  }
+  const r1=dijkstra(srcs,dsts,1);            // 최소 시간
+  const r2=dijkstra(srcs,dsts,25);           // 최소 환승
+  if(r1) results.push({tag:'최단 시간',res:r1});
+  if(r2 && r1 && legsSig(r2)!==legsSig(r1)) results.push({tag:'최소 환승',res:r2});
+  if(direct<1.8){
+    results.push({tag:'도보',walkOnly:true,tot:walkMin(direct),km:direct});
+  }
+  results.sort((a,b)=>(a.res?a.res.tot:a.tot)-(b.res?b.res.tot:b.tot));
+  if(!results.length){ routeOut.innerHTML='<div class="err">경로를 찾지 못했습니다.</div>'; return; }
+  curResults={list:results,A,B};
+  results.forEach((r,ix)=>{
+    const card=renderRoute(r,A,B,ix);
+    r.card=card;
+    card.addEventListener('click',e=>{ if(e.target.closest('a')) return; selectRoute(ix); });
+    routeOut.appendChild(card);
+  });
+  rHint.textContent='경로 카드를 클릭하면 오른쪽 지도에 해당 경로가 표시됩니다.';
+  selectRoute(0);
+}
+function legsSig(res){ return buildLegs(res).filter(l=>l.kind==='ride').map(l=>l.line.id+l.from.idx+'-'+l.to.idx).join('|'); }
+function gmapsLink(A,B,mode){
+  const url=`https://www.google.com/maps/dir/?api=1&origin=${A.lat},${A.lon}&destination=${B.lat},${B.lon}&travelmode=transit`;
+  if(mode==='link') return `<a href="${url}" target="_blank">Google Maps 열기</a>`;
+  return url;
+}
+function renderRoute(r,A,B,ix){
+  const card=document.createElement('div'); card.className='rcard';
+  if(r.walkOnly){
+    card.innerHTML=`<div class="rhead"><span class="rtag" style="background:#64748b">${r.tag}</span>
+      <span class="rtime">${fmtMin(r.tot)}</span><span class="rmeta">약 ${r.km.toFixed(1)}km 도보</span>
+      <a class="gmaps" target="_blank" href="${gmapsLink(A,B)}">Google 길찾기</a></div>
+      <div class="steps"><div class="step"><div class="sicon walk">도보</div><div class="d">${A.name} → ${B.name}</div></div></div>`;
+    return card;
+  }
+  const legs=buildLegs(r.res);
+  const rides=legs.filter(l=>l.kind==='ride');
+  const nx=rides.length-1;
+  let html=`<div class="rhead"><span class="rtag"${ix>0?' style="background:#0d9488"':''}>${r.tag}</span>
+    <span class="rtime">약 ${fmtMin(r.res.tot)}</span>
+    <span class="rmeta">환승 ${Math.max(0,nx)}회 · ${rides.reduce((s,l)=>s+l.stops,0)}개 역 이동</span>
+    <a class="gmaps" target="_blank" href="${gmapsLink(A,B)}">Google 길찾기</a></div><div class="steps">`;
+  legs.forEach(l=>{
+    if(l.kind==='walk'){
+      html+=step('walk','도보',`<b>${A.name}</b> → <b>${l.to.st.name}</b>역 <small>(약 ${fmtMin(l.t)} + 열차 대기 ~${fmtMin(l.wait)})</small>`);
+    } else if(l.kind==='ride'){
+      html+=step('ride',l.line.id,`<b style="color:${l.line.color}">${l.line.kr}</b> 탑승<br><b>${l.from.st.name}</b> → <b>${l.to.st.name}</b> <small>(${l.stops}개 역 · 약 ${fmtMin(l.t)})</small>`,l.line);
+    } else if(l.kind==='xfer'){
+      html+=step('walk','환승',`<b>${l.from.st.name}</b>에서 <b>${l.to.st.name}</b>(${l.to.line.kr})으로 환승 <small>(이동 ${fmtMin(l.t)} + 대기 ~${fmtMin(l.wait)})</small>`);
+    } else if(l.kind==='walk-out'){
+      html+=step('walk','도보',`<b>${l.from.st.name}</b>역 → <b>${B.name}</b> <small>(약 ${fmtMin(l.t)})</small>`);
+    }
+  });
+  html+='</div>';
+  card.innerHTML=html;
+  return card;
+}
+function step(kind,label,body,line){
+  const bg = kind==='ride' ? `style="background:${line.color}${line.id==='PY'?';color:#333':''}"` : '';
+  return `<div class="step"><div class="sicon ${kind==='ride'?'':'walk'}" ${bg}>${label}</div><div class="d">${body}</div></div>`;
+}
+
+// default destination for first visit
+inTo.value='UCSI Subang Jaya (SS13)';
+</script>
+</body>
+</html>
