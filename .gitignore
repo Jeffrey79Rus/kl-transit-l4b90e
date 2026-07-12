@@ -1,0 +1,4 @@
+﻿deploy-github.ps1
+*.bat
+.repo-name
+
